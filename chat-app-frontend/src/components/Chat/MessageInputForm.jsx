@@ -1,4 +1,5 @@
 import React from "react";
+import { useTheme } from "../../context/ThemeContext";
 
 const MessageInputForm = ({
   selectedUserId,
@@ -6,34 +7,63 @@ const MessageInputForm = ({
   setNewMessage,
   sendMessage,
 }) => {
+  const { mode } = useTheme();
+
+  // Theme-based classes
+  const containerBg =
+    mode === "dark" ? "bg-gray-900 border-t border-gray-800" : "bg-gray-50 border-t border-gray-200";
+  const inputBg =
+    mode === "dark"
+      ? "bg-gray-900 border border-gray-700 text-gray-100 placeholder:text-gray-400"
+      : "bg-white border border-gray-200 text-[#1B2559] placeholder:text-[#8F9BBA]";
+  const sendBtnBg =
+    mode === "dark"
+      ? "bg-blue-700 hover:bg-blue-800"
+      : "bg-blue-100 hover:bg-blue-200";
+  const sendIconColor =
+    mode === "dark" ? "text-white" : "text-[#2563eb]";
+
   return (
     <>
       {!!selectedUserId && (
-        <form
-          onSubmit={sendMessage}
-          className="relative m-4 w-[calc(100%-2rem)] max-w-[700px] mx-auto"
-        >
-          <input
-            type="search"
-            id="search-dropdown"
-            className="w-full px-4 py-3 pr-24 rounded-xl bg-transparent border border-gray-600 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            placeholder="Your Message"
-            value={newMessage}
-            onChange={(ev) => setNewMessage(ev.target.value)}
-            required
-          />
-          <div className="absolute end-2 top-1/2 transform -translate-y-1/2 flex gap-1">
+        <div className={`w-full ${containerBg} flex items-center py-4 px-2 sm:px-6`}>
+          <form
+            onSubmit={sendMessage}
+            className="relative w-full flex items-center"
+          >
+            <input
+              type="text"
+              className={`
+                w-full pr-12 pl-4 py-3 rounded-2xl font-sans text-[15px]
+                ${inputBg}
+                focus:outline-none focus:ring-2 focus:ring-blue-100 transition
+                placeholder:font-normal
+              `}
+              placeholder="Type your message..."
+              value={newMessage}
+              onChange={(ev) => setNewMessage(ev.target.value)}
+              required
+              autoComplete="off"
+            />
             <button
               type="submit"
-              className="aspect-square h-10 font-medium rounded-lg text-sm px-3 py-2"
+              className={`
+                absolute right-3 top-1/2 -translate-y-1/2
+                flex items-center justify-center
+                w-9 h-9 rounded-full ${sendBtnBg}
+                transition
+                disabled:opacity-50
+              `}
+              aria-label="Send"
+              disabled={!newMessage.trim()}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
-                strokeWidth={1.2}
+                strokeWidth={2}
                 stroke="currentColor"
-                className="w-6 h-6"
+                className={`w-5 h-5 ${sendIconColor}`}
               >
                 <path
                   strokeLinecap="round"
@@ -42,9 +72,8 @@ const MessageInputForm = ({
                 />
               </svg>
             </button>
-          </div>
-        </form>
-
+          </form>
+        </div>
       )}
     </>
   );

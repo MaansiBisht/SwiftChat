@@ -11,6 +11,9 @@ import { useAuth } from "../context/authContext";
 import { useNavigate } from "react-router-dom";
 import { decryptMessage, encryptMessage, fetchPublicKey, getPrivateKey } from "../helper/cryptoUtils";
 import toast from "react-hot-toast";
+import MessagesHeader from "../components/Chat/MessageHeader";
+import { useTheme } from "../context/ThemeContext";
+import { getAccessToken, refreshAccessToken } from "../helper/tokenUtils";
 
 const ChatHome = () => {
   const [ws, setWs] = useState(null);
@@ -21,23 +24,65 @@ const ChatHome = () => {
   const [newMessage, setNewMessage] = useState("");
   const { userDetails } = useProfile();
   const { isAuthenticated, checkAuth } = useAuth();
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  const showChat = isMobile ? !!selectedUserId : true;
+  const showList = isMobile ? !selectedUserId : true;
   const navigate = useNavigate();
+  const { mode } = useTheme();
 
-  const connectToWebSocket = () => {
-    const ws = new WebSocket(socketUrl);
+  const mainBg = mode === "dark" ? "bg-gray-800" : "bg-[#F6F9FE]";
+  const chatBg = mode === "dark" ? "bg-gray-800" : "bg-[#F6F9FE]";
+
+
+  const connectToWebSocket = (token) => {
+    const ws = new window.WebSocket(`${socketUrl}?token=${token}`);
     ws.addEventListener("message", handleMessage);
     setWs(ws);
     return ws;
   };
 
   useEffect(() => {
-    const ws = connectToWebSocket();
-    console.log(ws);
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    let ws;
+    let reconnectAttempts = 0;
+    let reconnectTimeout;
+
+    const connect = async () => {
+      const token = await getAccessToken(); // Always get the latest token
+      ws = connectToWebSocket(token);
+
+      ws.onclose = async (event) => {
+        if (event.code === 4001) { // Token expired
+          try {
+            await refreshAccessToken(); // Refresh the token
+            reconnectAttempts = 0;
+            connect(); // Reconnect with the new token
+          } catch (err) {
+            toast.error("Session expired, please log in again.");
+            navigate("/login");
+          }
+        } else {
+          // For other disconnects, try to reconnect with exponential backoff + jitter
+          reconnectAttempts++;
+          const delay = Math.min(1000 * 2 ** reconnectAttempts + Math.random() * 1000, 30000);
+          reconnectTimeout = setTimeout(connect, delay);
+        }
+      };
+
+      ws.onmessage = handleMessage;
+      setWs(ws);
+    };
+
+    connect();
+
     return () => {
-      // Check if the WebSocket exists and is open or connecting before closing
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        ws.close();
-      }
+      if (ws) ws.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, [userDetails]);
 
@@ -75,30 +120,62 @@ const ChatHome = () => {
   }, [onlinePeople, userDetails]);
 
   useEffect(() => {
-    const fetchMessages = async () => {
-      if (!selectedUserId || !userDetails?._id) return;
+    if (!selectedUserId || !userDetails?._id) return;
+  
+    const fetchAndDecryptMessages = async () => {
       try {
         const res = await axios.get(`/api/user/messages/${selectedUserId}`);
         const privateKey = await getPrivateKey();
         const decryptedMessages = await Promise.all(
           res.data.map(async (msg) => {
-            // Decrypt only messages where recipient is the current user (including self-copy)
             if (msg.recipient === userDetails._id) {
-              const decryptedText = await decryptMessage(msg.text, privateKey);
-              return { ...msg, text: decryptedText };
+              try {
+                const decryptedText = await decryptMessage(msg.text, privateKey);
+                return { ...msg, text: decryptedText };
+              } catch (decryptError) {
+                console.error("Decryption error:", decryptError);
+                return { ...msg, text: "[Decryption failed]" };
+              }
             }
-            // Messages not decryptable by current user
             return { ...msg, text: "[Cannot decrypt]" };
           })
         );
         setMessages(decryptedMessages);
       } catch (error) {
-        console.error("Error fetching or decrypting messages:", error);
-        toast("Error fetching messages");
+        if (error.response?.status === 401) {
+          try {
+            await refreshAccessToken();
+            // Retry after refreshing token
+            const retryRes = await axios.get(`/api/user/messages/${selectedUserId}`);
+            const privateKey = await getPrivateKey();
+            const decryptedMessages = await Promise.all(
+              retryRes.data.map(async (msg) => {
+                if (msg.recipient === userDetails._id) {
+                  try {
+                    const decryptedText = await decryptMessage(msg.text, privateKey);
+                    return { ...msg, text: decryptedText };
+                  } catch (decryptError) {
+                    console.error("Decryption error:", decryptError);
+                    return { ...msg, text: "[Decryption failed]" };
+                  }
+                }
+                return { ...msg, text: "[Cannot decrypt]" };
+              })
+            );
+            setMessages(decryptedMessages);
+          } catch (refreshError) {
+            console.error("Token refresh or retry failed:", refreshError);
+            navigate("/login");
+          }
+        } else {
+          console.error("Error fetching or decrypting messages:", error);
+          toast("Error fetching messages");
+        }
       }
     };
-    fetchMessages();
-  }, [selectedUserId, userDetails?._id]);
+  
+    fetchAndDecryptMessages();
+  }, [selectedUserId, userDetails?._id]);  
 
 
   useEffect(() => {
@@ -210,40 +287,51 @@ const ChatHome = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-900">
+    <div className={`flex min-h-screen font-sans ${mainBg}`}>
       <Nav />
-      <OnlineUsersList
-        onlinePeople={onlinePeople}
-        selectedUserId={selectedUserId}
-        setSelectedUserId={setSelectedUserId}
-        offlinePeople={offlinePeople}
-      />
+      <div className="flex-1 flex flex-col">
+        <MessagesHeader />
+        <div className="flex flex-1">
+          {/* Online Users List */}
+          {showList && (
+            <div className="w-full sm:w-[350px] max-w-full sm:max-w-[350px] min-h-0 h-full">
+              <OnlineUsersList
+                onlinePeople={onlinePeople}
+                selectedUserId={selectedUserId}
+                setSelectedUserId={setSelectedUserId}
+                offlinePeople={offlinePeople}
+              />
+            </div>
+          )}
 
-      <section className="w-[71%] lg:w-[62%] relative pb-10">
-        {selectedUserId && (
-          <TopBar
-            selectedUserId={selectedUserId}
-            setSelectedUserId={setSelectedUserId}
-            offlinePeople={offlinePeople}
-            onlinePeople={onlinePeople}
-          />
-        )}
-
-        <ChatMessages
-          messages={messages}
-          userDetails={userDetails}
-          selectedUserId={selectedUserId}
-        />
-
-        <div className="absolute w-full bottom-0 flex justify-center">
-          <MessageInputForm
-            newMessage={newMessage}
-            setNewMessage={setNewMessage}
-            sendMessage={sendMessage}
-            selectedUserId={selectedUserId}
-          />
+          {/* Chat Area */}
+          {showChat && (
+            <section className={`flex-1 w-full sm:w-[71%] lg:w-[62%] relative pb-10 ${chatBg}`}>
+              {selectedUserId && (
+                <TopBar
+                  selectedUserId={selectedUserId}
+                  setSelectedUserId={isMobile ? () => setSelectedUserId(null) : setSelectedUserId}
+                  offlinePeople={offlinePeople}
+                  onlinePeople={onlinePeople}
+                />
+              )}
+              <ChatMessages
+                messages={messages}
+                userDetails={userDetails}
+                selectedUserId={selectedUserId}
+              />
+              <div className="absolute w-full bottom-0">
+                <MessageInputForm
+                  newMessage={newMessage}
+                  setNewMessage={setNewMessage}
+                  sendMessage={sendMessage}
+                  selectedUserId={selectedUserId}
+                />
+              </div>
+            </section>
+          )}
         </div>
-      </section>
+      </div>
     </div>
   );
 };

@@ -1,165 +1,162 @@
-import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/authContext";
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/authContext';
+import { MessageCircle, Users, Settings, LogOut, Menu, X, Sun, Moon } from 'lucide-react';
 
 const Nav = () => {
-  const { logout, isAuthenticated } = useAuth();
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState(windowWidth >= 1024);
-  const navigate = useNavigate();
+  const { mode, toggleTheme } = useTheme();
+  const { logout } = useAuth();
+  const location = useLocation();
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!isAuthenticated) navigate("/login");
-  }, [isAuthenticated, navigate]);
+  // Theme colors matching SwiftChat design
+  const sidebarBg = mode === 'dark' ? 'bg-gray-900' : 'bg-white';
+  const sidebarText = mode === 'dark' ? 'text-white' : 'text-gray-900';
+  const iconBg = mode === 'dark' ? '#ffffff' : '#374151';
+  const activeBg = mode === 'dark' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600';
+  const hoverBg = mode === 'dark' ? 'hover:bg-slate-700' : 'hover:bg-gray-50';
+  const iconColor = mode === 'dark' ? 'text-slate-400' : 'text-gray-500';
+  const borderColor = mode === 'dark' ? 'border-slate-700' : 'border-gray-200';
 
-  // Track window resize
+  const navItems = [
+    {
+      to: '/profile',
+      label: 'Profile',
+      icon: <Users className="w-5 h-5" />
+    },
+    {
+      to: '/chathome',
+      label: 'Messages',
+      icon: <MessageCircle className="w-5 h-5" />
+    },
+    {
+      to: '/',
+      label: 'Settings',
+      icon: <Settings className="w-5 h-5" />
+    }
+  ];
+
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Auto-show sidebar on desktop, hide on mobile
+  // Close mobile nav when clicking outside
   useEffect(() => {
-    if (windowWidth >= 1024) {
-      setIsMobileNavOpen(true);
-    } else {
-      setIsMobileNavOpen(false);
-    }
-  }, [windowWidth]);
+    const handleClickOutside = (event) => {
+      if (isMobileNavOpen && windowWidth < 1024) {
+        const sidebar = document.getElementById('mobile-sidebar');
+        const toggleButton = document.getElementById('mobile-toggle');
 
-  // Define sidebar nav items
-  const navItems = [
-    { to: "/profile", icon: "profile", label: "Profile" },
-    { to: "/chathome", icon: "chats", label: "Chats" },
-  ];
+        if (sidebar && !sidebar.contains(event.target) &&
+          toggleButton && !toggleButton.contains(event.target)) {
+          setIsMobileNavOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isMobileNavOpen, windowWidth]);
 
   return (
     <>
       {/* Mobile Toggle Button */}
       {windowWidth < 1024 && (
         <button
+          id="mobile-toggle"
           onClick={() => setIsMobileNavOpen((open) => !open)}
-          className="flex fixed bottom-5 left-5 h-10 aspect-square rounded-full bg-gray-800 items-center justify-center z-50"
+          className={`fixed top-4 left-4 h-10 w-10 rounded-lg flex items-center justify-center z-50 shadow-lg transition-all ${mode === 'dark' ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white hover:bg-gray-50'
+            } ${borderColor} border`}
         >
           <span className="sr-only">
             {isMobileNavOpen ? "Close menu" : "Open menu"}
           </span>
           {isMobileNavOpen ? (
-            // Close (X) icon
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-6 h-6 text-white"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <X className="w-5 h-5" style={{ color: iconBg }} />
           ) : (
-            // Hamburger icon
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-6 h-6 text-white"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-              />
-            </svg>
+            <Menu className="w-5 h-5" style={{ color: iconBg }} />
           )}
         </button>
       )}
 
+      {/* Overlay for mobile */}
+      {isMobileNavOpen && windowWidth < 1024 && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-30"
+          onClick={() => setIsMobileNavOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       {(isMobileNavOpen || windowWidth >= 1024) && (
-        <header className="fixed lg:static h-screen w-[150px] z-40 bg-gray-800 text-white flex flex-col">
-          {/* Logo/Brand */}
-          <Link
-            to="/"
-            className="flex gap-2 items-center justify-center border-b border-gray-700 py-4"
-          >
-            <img
-              src="https://flowbite.com/docs/images/logo.svg"
-              className="h-8"
-              alt="Swift Logo"
-            />
-            <span className="font-semibold text-xl mr-2">Swift</span>
-          </Link>
-
-          {/* Main Navigation */}
-          <nav className="flex-1 flex flex-col justify-between overflow-y-auto">
-            <div className="flex flex-col gap-5 px-4 pt-4">
-              {/* Nav Items */}
-              {navItems.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className="flex gap-1 items-center hover:text-indigo-400 transition-colors"
-                >
-                  <span>{item.label}</span>
-                </Link>
-              ))}
-            </div>
-
-            {/* Bottom section: Back and Logout */}
-            <div className="flex flex-col gap-5 px-4 pb-14">
-              {/* Back Button */}
+        <aside
+          id="mobile-sidebar"
+          className={`fixed lg:static left-0 top-0 h-screen w-72 z-40 flex flex-col shadow-xl transition-all duration-300 ${sidebarBg} ${sidebarText} ${borderColor} border-r`}
+        >
+          <div className={`p-6 border-b ${borderColor}`}>
+            <div className="flex items-center justify-between mb-6">
+              <Link to="/" className="flex items-center gap-3">
+                <img
+                  src="https://flowbite.com/docs/images/logo.svg"
+                  className="h-8"
+                  alt="Logo"
+                />
+                <span className="font-bold text-2xl">SwiftChat</span>
+              </Link>
               <button
-                onClick={() => navigate(-1)}
-                className="flex gap-1 items-center hover:text-indigo-400 transition-colors"
+                onClick={toggleTheme}
+                className={`p-2 rounded-lg transition-colors ml-2 ${mode === 'dark'
+                    ? 'hover:bg-slate-700 text-slate-400 hover:text-slate-300'
+                    : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
+                  }`}
+                title={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-6 h-6"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
-                  />
-                </svg>
-                <span>Back</span>
-              </button>
-              {/* Logout Button */}
-              <button
-                onClick={logout}
-                className="flex gap-1 items-center hover:text-indigo-400 transition-colors mb-6"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-6 h-6"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M8.25 9V5.25A2.25 2.25 0 0110.5 3h6a2.25 2.25 0 012.25 2.25v13.5A2.25 2.25 0 0116.5 21h-6a2.25 2.25 0 01-2.25-2.25V15m-3 0l3-3m0 0l3 3m-3-3H15"
-                  />
-                </svg>
-                <span>Logout</span>
+                {mode === 'dark' ? (
+                  <Sun className="w-5 h-5" />
+                ) : (
+                  <Moon className="w-5 h-5" />
+                )}
               </button>
             </div>
+          </div>
+
+
+          {/* Navigation Items */}
+          <nav className="flex-1 flex flex-col gap-1 p-4">
+            {navItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => windowWidth < 1024 && setIsMobileNavOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${location.pathname === item.to
+                    ? activeBg
+                    : `${iconColor} ${hoverBg} hover:text-blue-600`
+                  }`}
+              >
+                {item.icon}
+                <span className="text-sm">{item.label}</span>
+              </Link>
+            ))}
           </nav>
-        </header>
+
+          {/* Logout Button */}
+          <div className="p-4 mt-auto">
+            <button
+              onClick={() => {
+                logout();
+                windowWidth < 1024 && setIsMobileNavOpen(false);
+              }}
+              className={`flex items-center gap-3 px-4 py-3 w-full rounded-lg text-red-500 hover:text-red-600 ${hoverBg} transition-all duration-200`}
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="text-sm font-medium">Logout</span>
+            </button>
+          </div>
+        </aside>
       )}
     </>
   );

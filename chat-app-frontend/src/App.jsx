@@ -17,6 +17,7 @@ import { ProfileProvider } from "./context/profileContext";
 import { useEffect } from "react";
 import Profile from "./components/Profile";
 import { baseUrl } from "../apiConfig";
+import { ThemeProvider } from "./context/ThemeContext";
 
 const Layout = () => {
   const { isAuthenticated, checkAuth } = useAuth();
@@ -71,7 +72,9 @@ function App() {
     <>
       <AuthProvider>
         <ProfileProvider>
-          <RouterProvider router={router} />
+          <ThemeProvider>
+            <RouterProvider router={router} />
+          </ThemeProvider>
           <Toaster />
         </ProfileProvider>
       </AuthProvider>
